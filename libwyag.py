@@ -136,3 +136,19 @@ def repo_default_config():
     ret.set("core", "bare", "false")
 
     return ret
+
+def repo_find(path=".", required=True):
+    path = os.path.realpath(path)
+
+    if os.path.isdir(os.path.join(path, ".git")):
+        return GitReposity(path)
+    
+    parent = os.path.realpath(os.path.join(path, ".."))
+
+    if parent == path:
+        if required:
+            raise Exception("no repository")
+        else:
+            return None
+
+    return repo_find(parent, required)
