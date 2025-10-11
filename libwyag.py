@@ -16,7 +16,7 @@ argsubparsers = argparser.add_subparsers(title="Commands", dest="command")
 argsubparsers.required = True
 
 def main(argv=sys.argv[1:]):
-    args = argsparser.parse_args(argv)
+    args = argparser.parse_args(argv)
     match args.command:
         case "add": cmd_add(args)
         case "cat-file": cmd_cat_file(args)
