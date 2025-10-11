@@ -1,19 +1,22 @@
 import argparse
 import configparser
 from datetime import datetime
-import grp, pwd
+# import grp, pwd
 from fnmatch import fnmatch
-import hashlib
+# import hashlib
 from math import ceil
 import os
-import re
+# import re
 import sys 
-import zlib
+# import zlib
 
 argparser = argparse.ArgumentParser(description="version control")
 
 argsubparsers = argparser.add_subparsers(title="Commands", dest="command")
 argsubparsers.required = True
+
+argsp = argsubparsers.add_parser("init", help="Initialize a new empty repository")
+argsp.add_argument("path", metavar="directory", nargs="?", default=".", help="Where to create the repo")
 
 def main(argv=sys.argv[1:]):
     args = argparser.parse_args(argv)
@@ -34,6 +37,9 @@ def main(argv=sys.argv[1:]):
         case "status": cmd_status(args)
         case "tag": cmd_tag(args)
         case _: print("Unknown command") 
+
+def cmd_init(args):
+    repo_create(args.path)
 
 class GitReposity (object):
     """A repository for version control"""
@@ -64,7 +70,7 @@ class GitReposity (object):
 
 def repo_path(repo, *path):
     """Get path under repo gitdir"""
-    return os.path.join(repo.getdir, *path)
+    return os.path.join(repo.gitdir, *path)
 
 def repo_file(repo, *path, mkdir=False):
     """Same as repo_path, but create dirname(*path) if absent.  For
@@ -90,3 +96,43 @@ def repo_dir(repo, *path, mkdir=False):
         return path
     else:
         return None
+    
+def repo_create(path):
+    """Create a new repo"""
+
+    repo = GitReposity(path, True)
+
+    if os.path.exists(repo.worktree):
+        if not os.path.isdir(repo.worktree):
+            raise Exception(f"{path} is not a directory")
+        if not os.path.exists(repo.gitdir) and os.listdir(repo.gitdir):
+            raise Exception(f"{path} is not empty")
+    else:
+        os.makedirs(repo.worktree)
+
+    assert repo_dir(repo, "branches", mkdir=True)
+    assert repo_dir(repo, "objects", mkdir=True)
+    assert repo_dir(repo, "refs", "tags", mkdir=True)
+    assert repo_dir(repo, "refs", "heads", mkdir=True)
+
+    with open(repo_file(repo, "description"), "w") as f:
+        f.write("Unnamed repository; edit this file 'description to name repo \n")
+
+    with open(repo_file(repo, "HEAD"), "w") as f:
+        f.write("ref: refs/heads/master\n")
+
+    with open(repo_file(repo, "config"), "w") as f:
+        config = repo_default_config()
+        config.write(f)
+
+    return repo
+
+def repo_default_config():
+    ret = configparser.ConfigParser()
+
+    ret.add_section("core")
+    ret.set("core", "repositoryformatversion", "0")
+    ret.set("core", "filemode", "false")
+    ret.set("core", "bare", "false")
+
+    return ret
