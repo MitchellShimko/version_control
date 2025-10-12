@@ -18,6 +18,16 @@ argsubparsers.required = True
 argsp = argsubparsers.add_parser("init", help="Initialize a new empty repository")
 argsp.add_argument("path", metavar="directory", nargs="?", default=".", help="Where to create the repo")
 
+argsp = argsubparsers.add_parser("cat-file", help="Show content of object")
+argsp.add_argument("type", metavar="type", choices=["blob", "commit", "tag", "tree"], help="specify type")
+argsp.add_argument("object", metavar="object", help="object to display")
+
+argsp = argsubparsers.add_parser("hash-object", help="compute obj id and optionally creates blob from file")
+argsp.add_argument("-t", metavar="type", dest="type", choices=["blob", "commit", "tag", "tree"], default="blob", help="specify type")
+argsp.add_argument("-w", dest="write", action="store_true", help="Write obj into db")
+argsp.add_argument("path", help="read obj from <file>")
+
+
 def main(argv=sys.argv[1:]):
     args = argparser.parse_args(argv)
     match args.command:
@@ -52,7 +62,7 @@ class GitReposity (object):
         self.worktree = path
         self.gitdir = os.path.join(path, ".git")
 
-        if not (force or os.path.isdir(self.gitdr)):
+        if not (force or os.path.isdir(self.gitdir)):
             raise Exception(f"Not a repository {path}")
         
         self.conf = configparser.ConfigParser()
@@ -218,3 +228,93 @@ def object_write(obj, repo=None):
                 f.write(zlib.compress(result))
 
     return sha
+
+class GitBlob(GitObject):
+    fmt=b'blob'
+
+    def serialize(self):
+        return self.blobdata
+    
+    def deserialize(self, data):
+        self.blobdata = data
+
+def cmd_cat_file(args):
+    repo = repo_find()
+    cat_file(repo, args.object, fmt=args.type.encode())
+
+def cat_file(repo, obj, fmt=None):
+    obj = object_read(repo, object_find(repo, obj, fmt=fmt))
+    sys.stdout.buffer.write(obj.serialize())
+
+def object_find(repo, name, fmt=None, follow=True):
+    return name
+
+def cmd_hash_object(args):
+    if args.write:
+        repo = repo_find()
+    else:
+        repo = None
+    
+    with open(args.path, "rb") as fd:
+        sha = object_hash(fd, args.type.encode(), repo)
+        print(sha)
+
+def object_hash(fd, fmt, repo=None):
+    """Hash object, write to repo if given"""
+    data = fd.read()
+
+    match fmt:
+        case b'commit' : obj=GitCommit(data)
+        case b'tree' : obj=GitTree(data)
+        case b'tag' : obj=GitTag(data)
+        case b'blob' : obj=GitBlob(data)
+        case _: raise Exception(f"Unknown type {fmt}")
+    
+    return object_write(obj, repo)
+
+def kvlm_parse(raw, start=0, dct=None):
+    if not dict:
+        dct = dict()
+
+    spc = raw.find(b' ', start)
+    nl = raw.find(b'\n', start)
+
+    if(spc < 0) or (nl < spc):
+        assert nl == start
+        dct[None] = raw[start+1:]
+        return dct
+
+    key = raw[start:spc]
+
+    end = start
+    while True:
+        end = raw.find(b'\n', end+1)
+        if raw[end+1] != ord(' '): break
+    
+    value = raw[spc+1].replace(b'\n ', b'\n')
+
+    if key in dct:
+        if type(dict[key]) == list:
+            dct[key].append(value)
+        else:
+            dct[key] = [ dct[key], value]
+    else:
+        dct[key]=value
+    
+    return kvlm_parse(raw, start=end+1, dct=dct)
+
+def kvlm_serialize(kvlm):
+    ret = b''
+
+    for k in kvlm.keys():
+        if k == None: continue
+        val = kvlm[k]
+        if type(val) != list:
+            val = [val]
+
+        for v in val: 
+            ret += k + b' ' + (v.replace(b'\n', b'\n ')) + b'\n'
+
+    ret += b'\n' + kvlm[None]
+
+    return ret
