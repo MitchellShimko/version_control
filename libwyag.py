@@ -30,6 +30,10 @@ argsp.add_argument("path", help="read obj from <file>")
 argsp = argsubparsers.add_parser("log", help="display history of a commit")
 argsp.add_argument("commit", default="HEAD", nargs='?', help="commit to start at")
 
+argsp = argsubparsers.add_parser("ls-tree", help="print a tree")
+argsp.add_argument("-r", dest="recursive", action="store_true", help="recursive sub tree")
+argsp.add_argument("tree", help="a tree object")
+
 def main(argv=sys.argv[1:]):
     args = argparser.parse_args(argv)
     match args.command:
@@ -432,3 +436,28 @@ class GitTree(GitObject):
 
     def init(self):
         self.items = list()
+
+def cmd_ls_tree(args):
+    repo = repo_find()
+    ls_tree(repo, args.tree, args.recursive)
+
+def ls_tree(repo, ref, recursive=None, prefix=""):
+    sha = object_find(repo, ref, fmt=b"tree")
+    obj = object_read(repo, sha)
+    for item in obj.items:
+        if len(item.mode) == 5:
+            type = item.mode[0:1]
+        else:
+            type = item.mode[0:2]
+        
+        match type:
+            case b'04': type = "tree"
+            case b'10': type = "blob"
+            case b'12': type = "blob"
+            case b'16': type = "commit"
+            case _: raise Exception(f"bad leaf mode {item.mode}")
+
+        if not (recursive and type=='tree'):
+            print(f"{'0' * (6 - len(item.mode)) + item.mode.decode("ascii")} {type} {item.sha}\t{os.path.join(prefix, item.path)}")
+        else:
+            ls_tree(repo, item.sha, recursive, os.path.join(prefix, item.path))
