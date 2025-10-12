@@ -27,6 +27,8 @@ argsp.add_argument("-t", metavar="type", dest="type", choices=["blob", "commit",
 argsp.add_argument("-w", dest="write", action="store_true", help="Write obj into db")
 argsp.add_argument("path", help="read obj from <file>")
 
+argsp = argsubparsers.add_parser("log", help="display history of a commit")
+argsp.add_argument("commit", default="HEAD", nargs='?', help="commit to start at")
 
 def main(argv=sys.argv[1:]):
     args = argparser.parse_args(argv)
@@ -318,3 +320,52 @@ def kvlm_serialize(kvlm):
     ret += b'\n' + kvlm[None]
 
     return ret
+
+class GitCommit(GitObject):
+    fmt=b'commit'
+
+    def deserialize(self, data):
+        self.kvlm = kvlm_parse(data)
+    
+    def serialize(self, repo):
+        return kvlm_serialize(self.kvlm)
+    
+    def init(self):
+        self.kvlm = dict()
+
+def cmd_log(args):
+    repo = repo_find()
+
+    print("digraph wyaglog{")
+    print(" node[shape=rect]")
+    log_graphviz(repo, object_find(repo, args.commit), set())
+    print("}")
+
+def log_graphviz(repo, sha, seen):
+    if sha in seen:
+        return 
+    seen.add(sha)
+
+    commit = object_read(repo, sha)
+    message = commit.kvlm[None].decode("utf8").strip()
+    message = message.replace("\\", "\\\\")
+    message = message.replace("\"", "\\\"")
+
+    if "\n" in message:
+        message = message[:message.index("\n")]
+    
+    print(f"c_{sha} [label=\"{sha[0:7]}: {message}\"]")
+    assert commit.fmt==b'commit'
+
+    if not b'parent' in commit.kvlm.keys():
+        return 
+
+    parents = commit.kvlm[b'parent']
+
+    if type(parents) != list:
+        parents = [parents]
+
+    for p in parents:
+        p = p.decode("ascii")
+        print(f" c_{sha} -> c_{p};")
+        log_graphviz(repo, p, seen)
