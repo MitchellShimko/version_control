@@ -1,7 +1,7 @@
 import argparse
 import configparser
 from datetime import datetime
-# import grp, pwd
+import grp, pwd
 from fnmatch import fnmatch
 import hashlib
 from math import ceil
@@ -48,6 +48,10 @@ argsp.add_argument("object", default="HEAD", nargs="?", help="object new tag wil
 argsp = argsubparsers.add_parser("rev-parse", help="parse revision identifiers")
 argsp.add_argument("--wyag-type", metavar="type", dest="type", choices=["blob", "commit", "tag", "tree"], default=None, help="Specify the expected type")
 argsp.add_argument("name", help="name to parse")
+
+argsp = argsubparsers.add_parser("ls-files", help="list stage files")
+argsp.add_argument("--verbose", action="store_true", help="show everything")
+
 
 def main(argv=sys.argv[1:]):
     args = argparser.parse_args(argv)
@@ -758,3 +762,21 @@ def index_read(repo):
                                      name=name))
 
     return GitIndex(version=version, entries=entries)
+
+def cmd_ls_files(args):
+    repo = repo_find()
+    index = index_read(repo)
+    if args.verbose:
+        print(f"index file format v{index.version}, containing {len(index.entries)} entries")
+
+    for e in index.entries:
+        print(e.name)
+        if args.verbose:
+            entry_type = { 0b1000: "regular file", 0b1010: "symlink", 0b1110: "git link"} [e.mode_type]
+            print(f" {entry_type} with perms: {e.mode_perms:o}")
+            print(f" on blob: {e.sha}")
+            print(f" created: {datetime.fromtimestamp(e.ctime[0])}.{e.ctime[1]}, modified: {datetime.fromtimestamp(e.mtime[0])}.{e.mtime[1]}")
+            print(f" device: {e.dev}, inode: {e.ino}")
+            print(f" user: {pwd.getpwuid(e.uid).pw_name} ({e.uid})")
+
+
