@@ -52,6 +52,8 @@ argsp.add_argument("name", help="name to parse")
 argsp = argsubparsers.add_parser("ls-files", help="list stage files")
 argsp.add_argument("--verbose", action="store_true", help="show everything")
 
+argsp = argsubparsers.add_parser("check-ignore", help="check paths against ignore file")
+argsp.add_argument("path", nargs="+", help="paths to check")
 
 def main(argv=sys.argv[1:]):
     args = argparser.parse_args(argv)
@@ -780,4 +782,68 @@ def cmd_ls_files(args):
             print(f" user: {pwd.getpwuid(e.uid).pw_name} ({e.uid}) group: {grp.getgrgid(e.gid).gr_name} ({e.gid})")
             print(f" flags: stage={e.flag_stage} assume_valid={e.flag_assume_valid}")
 
+def cmd_check_ignore(args):
+    repo = repo_find()
+    rules = gitignore_read(repo)
+    for path in args.path:
+        if check_ignore(rules, path):
+            print(path)
 
+def gitignore_parse1(raw):
+    raw = raw.strip()
+
+    if not raw or raw[0] == '#':
+        return None
+    elif raw [0] == "!":
+        return (raw[1:], False)
+    elif raw [0] == "\\":
+        return (raw[1:], True)
+    else:
+        return (raw, True)
+
+def gitignore_parse(lines):
+    ret = list()
+
+    for line in lines:
+        parsed = gitignore_parse1(line)
+        if parsed:
+            ret.append(parsed)
+
+    return ret
+
+class GitIgnore(object):
+    absolute = None
+    scoped = None
+
+    def __init__(self, absolute, scoped):
+        self.absolute = absolute
+        self.scoped = scoped
+
+def gitignore_read(repo):
+    ret = GitIgnore(absolute=list(), scoped=dict())
+
+    repo_file = os.path.join(repo.gitdir, "info/exclude")
+    if os.path.exists(repo_file):
+        with open(repo_file, 'r') as f:
+            ret.absolute.append(gitignore_parse(f.readlines()))
+    
+    if "XDG_CONFIG_HOME" in os.environ:
+        config_home = os.environ["XDG_CONFIG_HOME"]
+    else:
+        config_home = os.path.expanduser("~/.config")
+    global_file = os.path.join(config_home, "git/ignore")
+
+    if os.path.exists(global_file):
+        with open(global_file, "r") as f:
+            ret.absolute.append(gitignore_parse(f.readlines()))
+    
+    index = index_read(repo)
+
+    for entry in index.entries:
+        if entry.name == ".gitignore" or entry.name.endswith("/.gitignore"):
+            dir_name = os.path.dirname(entry.name)
+            contents = object_read(repo, entry.sha)
+            lines = contents.blobdata.decode("utf8").splitlines()
+            ret.scoped[dir_name] = gitignore_parse(lines)
+        
+        return ret
