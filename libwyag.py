@@ -777,6 +777,7 @@ def cmd_ls_files(args):
             print(f" on blob: {e.sha}")
             print(f" created: {datetime.fromtimestamp(e.ctime[0])}.{e.ctime[1]}, modified: {datetime.fromtimestamp(e.mtime[0])}.{e.mtime[1]}")
             print(f" device: {e.dev}, inode: {e.ino}")
-            print(f" user: {pwd.getpwuid(e.uid).pw_name} ({e.uid})")
+            print(f" user: {pwd.getpwuid(e.uid).pw_name} ({e.uid}) group: {grp.getgrgid(e.gid).gr_name} ({e.gid})")
+            print(f" flags: stage={e.flag_stage} assume_valid={e.flag_assume_valid}")
 
 
