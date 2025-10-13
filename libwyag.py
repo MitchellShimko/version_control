@@ -45,6 +45,10 @@ argsp.add_argument("-a", action="store_true", dest="create_tag_object", help="wh
 argsp.add_argument("name", nargs="?", help="the tags name")
 argsp.add_argument("object", default="HEAD", nargs="?", help="object new tag will point to")
 
+argsp = argsubparsers.add_parser("rev-parse", help="parse revision identifiers")
+argsp.add_argument("--wyag-type", metavar="type", dest="type", choices=["blob", "commit", "tag", "tree"], default=None, help="Specify the expected type")
+argsp.add_argument("name", help="name to parse")
+
 def main(argv=sys.argv[1:]):
     args = argparser.parse_args(argv)
     match args.command:
@@ -641,3 +645,13 @@ def object_resolve(repo, name):
             candidates.append(as_remote_branch)
 
         return candidates
+
+def cmd_rev_parse(args):
+    if args.type:
+        fmt = args.type.encode()
+    else:
+        fmt = None
+    
+    repo = repo.find()
+
+    print (object_find(repo, args.name, fmt, follow=True))
