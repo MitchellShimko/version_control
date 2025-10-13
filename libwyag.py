@@ -6,7 +6,7 @@ from fnmatch import fnmatch
 import hashlib
 from math import ceil
 import os
-# import re
+import re
 import sys 
 import zlib
 
@@ -577,3 +577,12 @@ def tag_create(repo, name, ref, create_tag_object=False):
 def ref_create(repo, ref_name, sha):
     with open(repo_file(repo, "refs/" + ref_name), 'w') as fp:
         fp.write(sha + "\n")
+
+def object_resolve(repo, name):
+    """Resolve name to a object has in repo"""
+
+    candidates = list()
+    hashRE = re.compile(r"^[0-9a-Fa-f]{4,40}$")
+
+    if not name.strip():
+        return None
